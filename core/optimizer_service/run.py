@@ -1,4 +1,5 @@
 import logging
+import time
 from dotenv import load_dotenv
 from typing import Tuple
 from core.optimizer_service.agent import get_qwen3_8b, get_agent
@@ -21,7 +22,7 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 
-DDL_CHECK_ITERATIONS_LIMIT = 10
+DDL_CHECK_ITERATIONS_LIMIT = 5
 QUERY_ITERATIONS_LIMIT = 3
 LOCAL_SCHEMA_NAME = "team320"
 LOCAL_CATALOG_NAME = "iceberg"
@@ -95,11 +96,16 @@ def run_pipeline(task_id: str, input_json: dict) -> Tuple[bool, DataOutput]:
             invoke_result = agent.invoke({"messages": messages})
         except Exception as e:
             logger.error(f"Exception during invoke {e}\n Skip iteration")
-            _it += 1
             continue
 
         messages = init_messages + [invoke_result["messages"][-1]]
         raw_content = invoke_result["messages"][-1].content
+
+        if raw_content.strip() == "":
+            time.sleep(10)
+            messages = init_messages
+            continue
+
         logger.info(f"AI Message:\n {raw_content}")
         if "#END#" not in raw_content:
             continue
@@ -162,6 +168,12 @@ def run_pipeline(task_id: str, input_json: dict) -> Tuple[bool, DataOutput]:
 
             messages = init_messages + [invoke_result["messages"][-1]]
             logger.info(f"AI Message:\n {invoke_result['messages'][-1].content}")
+
+            if invoke_result["messages"][-1].content.strip() == "":
+                time.sleep(10)
+                messages = init_messages
+                continue
+
             if invoke_result["messages"][-1].content.strip() == "IMPOSSIBLE":
                 break
 
