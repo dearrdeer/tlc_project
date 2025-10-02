@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 import uuid
 import logging
 
-from core.db.models import InputData, NewTaskResponse, StatusResponse
+from core.db.models import InputData, NewTaskResponse, StatusResponse, TaskResultResponse
 from core.db.database import execute_query
 
 app = FastAPI(title="TLC Project API", description="FastAPI service for TLC project")
@@ -77,7 +77,7 @@ async def get_task_status(task_id: str):
             raise HTTPException(status_code=404, detail="Task not found")
 
         task_data = result[0]
-        return StatusResponse(taskid=task_data[0], status=task_data[1])
+        return StatusResponse(status=task_data[1])
 
     except HTTPException:
         raise
@@ -86,13 +86,51 @@ async def get_task_status(task_id: str):
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
-@app.get("/getresult")
+@app.get("/getresult", response_model=TaskResultResponse)
 async def get_task_result(task_id: str):
     """
-    Get the result of a given task (placeholder implementation).
+    Get the result of a given task.
+    Collects DDL statements, migration statements, and queries from the database.
     """
-    # Placeholder implementation as requested
-    return {"message": "Result retrieval not implemented yet", "task_id": task_id}
+    try:
+        # Check if task exists
+        task_query = """
+            SELECT taskid, status FROM public.tasks WHERE taskid = :taskid
+        """
+        task_result = execute_query(task_query, {"taskid": task_id})
+
+        if not task_result:
+            raise HTTPException(status_code=404, detail="Task not found")
+
+        # Get DDL statements
+        ddl_query = """
+            SELECT statement FROM public.result_ddls WHERE taskid = :taskid
+        """
+        ddl_results = execute_query(ddl_query, {"taskid": task_id}) or []
+        ddl_list = [{"statement": row[0]} for row in ddl_results]
+
+        # Get migration statements
+        migration_query = """
+            SELECT statement FROM public.result_migrations WHERE taskid = :taskid
+        """
+        migration_results = execute_query(migration_query, {"taskid": task_id}) or []
+        migration_list = [{"statement": row[0]} for row in migration_results]
+
+        # Get queries
+        query_result_query = """
+            SELECT queryid, query FROM public.result_queries WHERE taskid = :taskid
+        """
+        query_results = execute_query(query_result_query, {"taskid": task_id}) or []
+        query_list = [{"queryid": row[0], "query": row[1]} for row in query_results]
+
+        # Return the structured response
+        return TaskResultResponse(ddl=ddl_list, migrations=migration_list, queries=query_list)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving task result: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
 @app.get("/")

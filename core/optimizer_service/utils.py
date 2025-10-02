@@ -1,4 +1,5 @@
 import re
+from typing import Tuple, List
 from urllib.parse import urlparse, parse_qs
 from core.optimizer_service.pydantic_models import DataOutput, DDL, SQL, Migration, DataInput
 
@@ -110,7 +111,7 @@ def raw_output_to_model(msg_content: str) -> DataOutput:
     return DataOutput(ddls=ddls, migrations=migrations, sqls=sqls)
 
 
-def raw_input_to_model(input_json: dict) -> DataOutput:
+def raw_input_to_model(input_json: dict) -> DataInput:
     ddls = [row["statement"] for row in input_json["ddl"]]
     sqls_w_priority_and_id = [
         (row["queryid"], row["query"], row["runquantity"] * row["executiontime"]) for row in input_json["queries"]
@@ -123,3 +124,31 @@ def raw_input_to_model(input_json: dict) -> DataOutput:
 
     catalog, schema = get_catalog_and_schema_from_ddl(ddls[0].ddl_script)
     return DataInput(catalog=catalog, catalog_schema=schema, ddls=ddls, sqls=sqls)
+
+
+def get_ddls_and_migrations_from_raw_output(msg_content: str) -> Tuple[List[DDL], List[Migration]]:
+    ddls_start = msg_content.find("DDLS:\n") + 6
+    migrations_start = msg_content.find("MIGRATIONS:\n") + 12
+    migrations_end = msg_content.find("#END#")
+
+    ddl_rows = msg_content[ddls_start : migrations_start - 12]
+    ddls = []
+
+    for row in ddl_rows.split(";"):
+        row = row.replace("\n", "")
+        statement = row[row.find(".") + 1 :].strip()
+        if statement == "":
+            continue
+        ddls.append(DDL(ddl_script=statement + ";"))
+
+    migration_rows = msg_content[migrations_start:migrations_end]
+    migrations = []
+
+    for row in migration_rows.split(";"):
+        row = row.replace("\n", "")
+        statement = row[row.find(".") + 1 :].strip()
+        if statement == "":
+            continue
+        migrations.append(Migration(statement=statement + ";"))
+
+    return ddls, migrations

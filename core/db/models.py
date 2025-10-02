@@ -55,5 +55,24 @@ class NewTaskResponse(BaseModel):
 
 
 class StatusResponse(BaseModel):
-    taskid: str
     status: str
+
+
+# Response model for task result
+class DDLResult(BaseModel):
+    statement: str
+
+
+class MigrationResult(BaseModel):
+    statement: str
+
+
+class QueryResult(BaseModel):
+    queryid: str
+    query: str
+
+
+class TaskResultResponse(BaseModel):
+    ddl: List[DDLResult]
+    migrations: List[MigrationResult]
+    queries: List[QueryResult]

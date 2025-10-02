@@ -28,10 +28,10 @@ class TrinoClustersManager:
         return self.server_trino_connection
 
 
-def get_trino(server_catalog_name):
+def get_trino(server_catalog_name, local_catalog_name):
     local_host_name = os.getenv("TRINO_HOST", "trino")
     local_port_name = int(os.getenv("TRINO_PORT", "8081"))
-    local_catalog_name = "iceberg"
+    local_catalog_name = local_catalog_name
 
     conn = trino.dbapi.trino.dbapi.connect(
         host=local_host_name,
@@ -43,6 +43,7 @@ def get_trino(server_catalog_name):
 
 
 def execute_statement_in_trino(trino: TrinoClustersManager, statement: str):
+    # replace server catalog name with local name
     exec_statement = statement.replace(f"{trino.server_catalog_name}.", f"{trino.local_catalog_name}.")
     cursor = trino.get_local_conn().cursor()
     try:
